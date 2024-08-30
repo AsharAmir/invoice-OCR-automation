@@ -26,6 +26,7 @@ def perform_ocr(image_path):
     """Load and perform OCR on the invoice image."""
     invoice_image = Image.open(image_path)
     extracted_text = pytesseract.image_to_string(invoice_image)
+    print(extracted_text)
     return extracted_text
 
 # Utility function to parse invoice using Google Generative AI
@@ -46,10 +47,12 @@ def parse_invoice_with_genai(extracted_text):
     f"    }}\n"
     f"  ]\n"
     f"Extract the following information from the text; Supplier Name (use your sense to find it, it'd be a standalone company name dont confuse it with sender, receiver name), "
-    f"Invoice Number (Bill No.), Package Weight (in kg), Quantity (Bill Qty / Qty, could also be listed as STR, BOX, nos etc), "
+    f"Invoice Number (Bill No. / Invoice No / (NOT THE TAX NUMBER / GSTIN/UIN etc)), Package Weight (in kg), Quantity (Bill Qty / Qty, could also be listed as STR, BOX, nos etc), "
     f"Rate (calculated from total invoice amount divided by quantity), GST (maybe mentioned as GST rate, or calculated by CSST rate + SGST rate, we need the rate, not the amount so it'll be a whole number and will be the same throughout the invoice for all items, just need the sum of the both not each of them twice), Sales Amount (Net amount etc), "
     f"pls note that these are the only needed headers and nothing more. Format this info in JSON format. "
     f"If there are multiple items in the invoice, provide an array of objects, each representing a single item with its details. "
+    "Ensure that:\n"
+    "- The Invoice Number is extracted correctly even if it is in a tabular format or is not the most prominent number. It should not be confused with other numbers like those in tables or addresses.\n"
     f"For entries with null values, ignore them in the output. Also just give a RAW JSON OUTPUT, NOT EVEN BACKTICKS. The supplier name and invoice number would be the header. and the item would contain the rest \n\n{extracted_text}\n\n"
     )
     model = genai.GenerativeModel(model_name="gemini-1.5-flash")
