@@ -32,19 +32,12 @@ def perform_ocr(image_path):
 def parse_invoice_with_genai(extracted_text):
     """Use Google Generative AI to extract invoice details in JSON format."""
     prompt = (
-        f"Extract the following information from the text: "
-        f"Supplier Name, Invoice Number, Invoice Date, Item Name, "
-        f"Package Weight, Quantity (also known as bill qty), Rate, GST, "
-        f"Sales Amount (ONLY THESE ARE THE NEEDED HEADERS, NO MORE THAN THESE). "
-        f"Format the extracted information in JSON format. "
-        f"If there are multiple items in the invoice, provide an array of objects, each "
-        f"representing a single item with its details. "
-        f"For entries with null values, ignore them in the output. "
-        f"Also just give a RAW JSON OUTPUT, NOT EVEN BACKTICKS. "
-        f"Also the quantity could be listed as STR, BOX etc. "
-        f"The supplier name will be a normal name somewhere at the top (use ur sense to find it)"
-        f"The RATE must be calculated by total invoice/net amount divided by the quantity(integer). "
-        f"The invoice number may be listed as bill number. The package weight can be skipped if its not present. \n\n{extracted_text}\n\n"
+    f"Extract the following information from the text; Supplier Name (use your sense to find it, it'd be a standalone company name dont confuse it with sender, receiver name), "
+    f"Invoice Number (Bill No.), Package Weight (in kg), Quantity (Bill Qty / Qty, could also be listed as STR, BOX, nos etc), "
+    f"Rate (calculated from total invoice amount divided by quantity), GST (maybe mentioned as GST rate, or calculated by CSST rate + SGST rate, we need the rate, not the amount so it'll be a whole number and will be the same throughout the invoice for all items, just need the sum of the both not each of them twice), Sales Amount (Net amount etc), "
+    f"pls note that these are the only needed headers and nothing more. Format this info in JSON format. "
+    f"If there are multiple items in the invoice, provide an array of objects, each representing a single item with its details. "
+    f"For entries with null values, ignore them in the output. Also just give a RAW JSON OUTPUT, NOT EVEN BACKTICKS. The supplier name and invoice number would be the header. and the item would contain the rest \n\n{extracted_text}\n\n"
     )
     model = genai.GenerativeModel(model_name="gemini-1.5-flash")
     chat_session = model.start_chat(history=[])
