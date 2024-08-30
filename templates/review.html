@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Parsed Data</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const processedFiles = {{ processed_files|tojson }};
+      const container = document.getElementById('data-container');
+
+      processedFiles.forEach(file => {
+        const fileDiv = document.createElement('div');
+        fileDiv.classList.add('file');
+
+        const filenameHeader = document.createElement('h2');
+        filenameHeader.textContent = file.filename;
+        fileDiv.appendChild(filenameHeader);
+
+        // Display other information
+        const otherInfoTable = document.createElement('table');
+        otherInfoTable.border = '1';
+        const otherInfoThead = document.createElement('thead');
+        const otherInfoTbody = document.createElement('tbody');
+        
+        const otherInfoHeaderRow = document.createElement('tr');
+        for (const [key, value] of Object.entries(file.data.other_info || {})) {
+          const th = document.createElement('th');
+          th.textContent = key;
+          otherInfoHeaderRow.appendChild(th);
+        }
+        otherInfoThead.appendChild(otherInfoHeaderRow);
+
+        const otherInfoRow = document.createElement('tr');
+        for (const [key, value] of Object.entries(file.data.other_info || {})) {
+          const td = document.createElement('td');
+          td.textContent = value;
+          otherInfoRow.appendChild(td);
+        }
+        otherInfoTbody.appendChild(otherInfoRow);
+
+        otherInfoTable.appendChild(otherInfoThead);
+        otherInfoTable.appendChild(otherInfoTbody);
+        fileDiv.appendChild(otherInfoTable);
+
+        // Display items table if items exist
+        if (file.data.items && file.data.items.length > 0) {
+          const itemsTable = document.createElement('table');
+          itemsTable.border = '1';
+          const itemsThead = document.createElement('thead');
+          const itemsTbody = document.createElement('tbody');
+
+          const itemsHeaderRow = document.createElement('tr');
+          Object.keys(file.data.items[0]).forEach(key => {
+            const th = document.createElement('th');
+            th.textContent = key;
+            itemsHeaderRow.appendChild(th);
+          });
+          itemsThead.appendChild(itemsHeaderRow);
+
+          file.data.items.forEach(item => {
+            const itemRow = document.createElement('tr');
+            Object.values(item).forEach(value => {
+              const td = document.createElement('td');
+              td.textContent = value;
+              itemRow.appendChild(td);
+            });
+            itemsTbody.appendChild(itemRow);
+          });
+
+          itemsTable.appendChild(itemsThead);
+          itemsTable.appendChild(itemsTbody);
+          fileDiv.appendChild(itemsTable);
+        } else {
+          const noItemsMessage = document.createElement('p');
+          noItemsMessage.textContent = 'No items found.';
+          fileDiv.appendChild(noItemsMessage);
+        }
+
+        container.appendChild(fileDiv);
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>Review Parsed Data</h1>
+  <form action="/accept" method="post">
+    <div id="data-container"></div>
+    <input type="hidden" name="parsed_data" value="{{ processed_files | tojson }}">
+    <button type="submit">Accept and Generate Excel</button>
+  </form>
+</body>
+</html>
