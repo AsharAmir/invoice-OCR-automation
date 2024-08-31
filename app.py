@@ -190,10 +190,11 @@ def parse_invoice_with_genai(extracted_text):
         "- Sales Amount: This could be labeled as Net amount, etc. Not to be calculateed, but rather to be picked from the data.\n\n"
         "Please note:\n"
         "- These are the only needed headers; do not include anything else.\n"
+        "- Do not generate any commas, or anything that will cause error when parsing the json decoding\n"
         "- If there are multiple items in the invoice, provide an array of objects, each representing a single item with its details.\n"
         "- The Invoice Number must be correctly extracted even if it is in a tabular format or not the most prominent number. It should not be confused with other numbers in tables or addresses.\n"
         "- For entries with null values, ignore them in the output.\n"
-        "- Lastly, since this is an OCR, there might be some data that will be incorrectly read, therefore I want you to ensure that quantity = sales amount / rate and vice versa wherever the value seems to be incorrect (ONLY DO THIS IN RARE CASES WHEN U CANT FIGURE OUT DATA).\n"
+        "- Lastly, since the raw text is OCR fetched, there sometimes might be issues in fetching the quantity field especially, so in that case, you are to calculate quantity from the sales amount divided by the rate (the quantity will always ofc be a lowerbound whole number).\n"
         "- Provide a RAW JSON OUTPUT, with no backticks or formatting. The supplier name and invoice number should be the headers, and the items should contain the rest.\n\n"
         f"{extracted_text}\n\n"
     )

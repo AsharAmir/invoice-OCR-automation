@@ -9,10 +9,9 @@
     document.addEventListener('DOMContentLoaded', () => {
       const processedFiles = {{ processed_files|tojson }};
       const container = document.getElementById('data-container');
-      const hiddenInput = document.querySelector('input[name="parsed_data"]');
 
-      function updateJsonData() {
-        hiddenInput.value = JSON.stringify(processedFiles);
+      function updateHiddenInput() {
+        document.querySelector('input[name="parsed_data"]').value = JSON.stringify(processedFiles);
       }
 
       processedFiles.forEach((file, fileIndex) => {
@@ -30,7 +29,7 @@
         const otherInfoTbody = document.createElement('tbody');
         
         const otherInfoHeaderRow = document.createElement('tr');
-        for (const key of Object.keys(file.data.other_info || {})) {
+        for (const [key, value] of Object.entries(file.data.other_info || {})) {
           const th = document.createElement('th');
           th.textContent = key;
           otherInfoHeaderRow.appendChild(th);
@@ -42,12 +41,10 @@
           const td = document.createElement('td');
           td.contentEditable = true;
           td.textContent = value;
-
-          td.addEventListener('input', () => {
-            file.data.other_info[key] = td.textContent;
-            updateJsonData();
+          td.addEventListener('input', (e) => {
+            file.data.other_info[key] = e.target.textContent;
+            updateHiddenInput();
           });
-
           otherInfoRow.appendChild(td);
         }
         otherInfoTbody.appendChild(otherInfoRow);
@@ -77,20 +74,43 @@
               const td = document.createElement('td');
               td.contentEditable = true;
               td.textContent = value;
-
-              td.addEventListener('input', () => {
-                file.data.items[itemIndex][key] = td.textContent;
-                updateJsonData();
+              td.addEventListener('input', (e) => {
+                file.data.items[itemIndex][key] = e.target.textContent;
+                updateHiddenInput();
               });
-
               itemRow.appendChild(td);
             });
             itemsTbody.appendChild(itemRow);
           });
 
+          // Add new row button
+          const addRowButton = document.createElement('button');
+          addRowButton.type = 'button';
+          addRowButton.textContent = 'Add Row';
+          addRowButton.addEventListener('click', () => {
+            const newRow = {};
+            Object.keys(file.data.items[0]).forEach(key => newRow[key] = '');
+            file.data.items.push(newRow);
+
+            const itemRow = document.createElement('tr');
+            Object.keys(newRow).forEach(key => {
+              const td = document.createElement('td');
+              td.contentEditable = true;
+              td.textContent = '';
+              td.addEventListener('input', (e) => {
+                newRow[key] = e.target.textContent;
+                updateHiddenInput();
+              });
+              itemRow.appendChild(td);
+            });
+            itemsTbody.appendChild(itemRow);
+            updateHiddenInput();
+          });
+
           itemsTable.appendChild(itemsThead);
           itemsTable.appendChild(itemsTbody);
           fileDiv.appendChild(itemsTable);
+          fileDiv.appendChild(addRowButton);
         } else {
           const noItemsMessage = document.createElement('p');
           noItemsMessage.textContent = 'No items found.';
@@ -100,8 +120,7 @@
         container.appendChild(fileDiv);
       });
 
-      // Initialize JSON data in hidden input
-      updateJsonData();
+      updateHiddenInput();
     });
   </script>
 </head>
@@ -111,6 +130,3 @@
     <div id="data-container"></div>
     <input type="hidden" name="parsed_data" value="{{ processed_files | tojson }}">
     <button type="submit">Accept and Generate Excel</button>
-  </form>
-</body>
-</html>
