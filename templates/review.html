@@ -9,8 +9,13 @@
     document.addEventListener('DOMContentLoaded', () => {
       const processedFiles = {{ processed_files|tojson }};
       const container = document.getElementById('data-container');
+      const hiddenInput = document.querySelector('input[name="parsed_data"]');
 
-      processedFiles.forEach(file => {
+      function updateJsonData() {
+        hiddenInput.value = JSON.stringify(processedFiles);
+      }
+
+      processedFiles.forEach((file, fileIndex) => {
         const fileDiv = document.createElement('div');
         fileDiv.classList.add('file');
 
@@ -25,7 +30,7 @@
         const otherInfoTbody = document.createElement('tbody');
         
         const otherInfoHeaderRow = document.createElement('tr');
-        for (const [key, value] of Object.entries(file.data.other_info || {})) {
+        for (const key of Object.keys(file.data.other_info || {})) {
           const th = document.createElement('th');
           th.textContent = key;
           otherInfoHeaderRow.appendChild(th);
@@ -35,7 +40,14 @@
         const otherInfoRow = document.createElement('tr');
         for (const [key, value] of Object.entries(file.data.other_info || {})) {
           const td = document.createElement('td');
+          td.contentEditable = true;
           td.textContent = value;
+
+          td.addEventListener('input', () => {
+            file.data.other_info[key] = td.textContent;
+            updateJsonData();
+          });
+
           otherInfoRow.appendChild(td);
         }
         otherInfoTbody.appendChild(otherInfoRow);
@@ -59,11 +71,18 @@
           });
           itemsThead.appendChild(itemsHeaderRow);
 
-          file.data.items.forEach(item => {
+          file.data.items.forEach((item, itemIndex) => {
             const itemRow = document.createElement('tr');
-            Object.values(item).forEach(value => {
+            Object.entries(item).forEach(([key, value]) => {
               const td = document.createElement('td');
+              td.contentEditable = true;
               td.textContent = value;
+
+              td.addEventListener('input', () => {
+                file.data.items[itemIndex][key] = td.textContent;
+                updateJsonData();
+              });
+
               itemRow.appendChild(td);
             });
             itemsTbody.appendChild(itemRow);
@@ -80,6 +99,9 @@
 
         container.appendChild(fileDiv);
       });
+
+      // Initialize JSON data in hidden input
+      updateJsonData();
     });
   </script>
 </head>
