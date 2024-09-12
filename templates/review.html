@@ -9,49 +9,99 @@
     document.addEventListener('DOMContentLoaded', () => {
       const processedFiles = {{ processed_files|tojson }};
       const container = document.getElementById('data-container');
+      const batchNumberInput = document.getElementById('batch-number');
+      const transportCostInput = document.getElementById('transport-cost');
 
       function updateHiddenInput() {
-        document.querySelector('input[name="parsed_data"]').value = JSON.stringify(processedFiles);
+        // Correctly format the JSON to match the expected structure
+        const hiddenInput = document.querySelector('input[name="parsed_data"]');
+        hiddenInput.value = JSON.stringify({
+          processedFiles: processedFiles.map(file => ({
+            data: {
+              ...file.data,
+              batchNumber: batchNumberInput.value,
+              transportCost: transportCostInput.value
+            }
+          }))
+        });
       }
+
+      // Validate batch number to be exactly 2 digits
+      batchNumberInput.addEventListener('input', () => {
+        const value = batchNumberInput.value;
+        if (!/^\d{0,2}$/.test(value)) {
+          batchNumberInput.value = value.slice(0, 2); // Allow only 2 digits
+        }
+        updateHiddenInput();
+      });
+
+      // Update the hidden input when transportation cost changes
+      transportCostInput.addEventListener('input', updateHiddenInput);
+
+      // Initial call to update hidden input
+      updateHiddenInput();
+
+      // List of internal item names for autocomplete
+      const internalItemNames = [
+        "PP ALMOND", "PP CHANNA DHALL", "PP CORIANDERA3", "PP DRIED GRAPES", "PP FENNEL",
+        "PP FENUGREK", "PP GREEN MOONG", "PP GREEN PEAS", "PP GROUNDNUT RAW", "PP GUNDU CHILLI",
+        "PP JAGGERY PL", "PP JAVARISI", "PP JEERA", "PP LONG CHILLI", "PP MAAVU JAVARISI",
+        "PP MEAL MAKER", "PP MEAL MAKER SMALL", "PP MOONG DHALL", "PP MOTCHAI", "PP MUSTARD BIG",
+        "PP MUSTARD SMALL", "PP ORID DHALL", "PP ORID DHALL BL", "PP ORID DHALL SPLIT",
+        "PP ORID DHALL SPLIT BLK", "PP PEPPER", "PP POTTUKADALAI", "PP RAGI", "PP RED CHANNA",
+        "PP RED CHANNA SMALL", "PP RED KARAMANI", "PP SUKKU", "PP TAMARIND", "PP TOOR DHALL",
+        "PP TURMERIC", "PP WH CHANNA", "PP WH CHANNA BIG", "PP WH KARAMANI", "PP WH PEAS",
+        "PP WHEAT", "PP WHEAT FLOUR"
+      ];
 
       processedFiles.forEach((file, fileIndex) => {
         const fileDiv = document.createElement('div');
         fileDiv.classList.add('file');
 
-        const filenameHeader = document.createElement('h2');
-        filenameHeader.textContent = file.filename;
-        fileDiv.appendChild(filenameHeader);
+        // Display Supplier Name and Invoice Number
+        const supplierInfo = document.createElement('div');
+        const supplierName = document.createElement('p');
+        const invoiceNumber = document.createElement('p');
 
-        // Display other information
-        const otherInfoTable = document.createElement('table');
-        otherInfoTable.border = '1';
-        const otherInfoThead = document.createElement('thead');
-        const otherInfoTbody = document.createElement('tbody');
-        
-        const otherInfoHeaderRow = document.createElement('tr');
-        for (const [key, value] of Object.entries(file.data.other_info || {})) {
-          const th = document.createElement('th');
-          th.textContent = key;
-          otherInfoHeaderRow.appendChild(th);
+        supplierName.textContent = `Supplier Name: ${file.data['Supplier Name']}`;
+        invoiceNumber.textContent = `Invoice Number: ${file.data['Invoice Number']}`;
+
+        supplierInfo.appendChild(supplierName);
+        supplierInfo.appendChild(invoiceNumber);
+        fileDiv.appendChild(supplierInfo);
+
+        // Display other information if present
+        if (file.data.other_info) {
+          const otherInfoTable = document.createElement('table');
+          otherInfoTable.border = '1';
+          const otherInfoThead = document.createElement('thead');
+          const otherInfoTbody = document.createElement('tbody');
+          
+          const otherInfoHeaderRow = document.createElement('tr');
+          for (const [key, value] of Object.entries(file.data.other_info || {})) {
+            const th = document.createElement('th');
+            th.textContent = key;
+            otherInfoHeaderRow.appendChild(th);
+          }
+          otherInfoThead.appendChild(otherInfoHeaderRow);
+
+          const otherInfoRow = document.createElement('tr');
+          for (const [key, value] of Object.entries(file.data.other_info || {})) {
+            const td = document.createElement('td');
+            td.contentEditable = true;
+            td.textContent = value;
+            td.addEventListener('input', (e) => {
+              file.data.other_info[key] = e.target.textContent;
+              updateHiddenInput();
+            });
+            otherInfoRow.appendChild(td);
+          }
+          otherInfoTbody.appendChild(otherInfoRow);
+
+          otherInfoTable.appendChild(otherInfoThead);
+          otherInfoTable.appendChild(otherInfoTbody);
+          fileDiv.appendChild(otherInfoTable);
         }
-        otherInfoThead.appendChild(otherInfoHeaderRow);
-
-        const otherInfoRow = document.createElement('tr');
-        for (const [key, value] of Object.entries(file.data.other_info || {})) {
-          const td = document.createElement('td');
-          td.contentEditable = true;
-          td.textContent = value;
-          td.addEventListener('input', (e) => {
-            file.data.other_info[key] = e.target.textContent;
-            updateHiddenInput();
-          });
-          otherInfoRow.appendChild(td);
-        }
-        otherInfoTbody.appendChild(otherInfoRow);
-
-        otherInfoTable.appendChild(otherInfoThead);
-        otherInfoTable.appendChild(otherInfoTbody);
-        fileDiv.appendChild(otherInfoTable);
 
         // Display items table if items exist
         if (file.data.items && file.data.items.length > 0) {
@@ -66,6 +116,20 @@
             th.textContent = key;
             itemsHeaderRow.appendChild(th);
           });
+
+          // Add headers for new columns
+          const internalItemNameTh = document.createElement('th');
+          internalItemNameTh.textContent = 'Internal Item Name';
+          itemsHeaderRow.appendChild(internalItemNameTh);
+
+          const brandNameTh = document.createElement('th');
+          brandNameTh.textContent = 'Brand Name';
+          itemsHeaderRow.appendChild(brandNameTh);
+
+          const packageWeightTh = document.createElement('th');
+          packageWeightTh.textContent = 'Package Weight';
+          itemsHeaderRow.appendChild(packageWeightTh);
+
           itemsThead.appendChild(itemsHeaderRow);
 
           file.data.items.forEach((item, itemIndex) => {
@@ -80,6 +144,52 @@
               });
               itemRow.appendChild(td);
             });
+
+            // Add Internal Item Name field with autocomplete and required attribute
+            const internalItemNameTd = document.createElement('td');
+            const internalItemNameInput = document.createElement('input');
+            internalItemNameInput.type = 'text';
+            internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${itemIndex}`);
+            internalItemNameInput.required = true; // Make this field mandatory
+            internalItemNameInput.addEventListener('input', (e) => {
+              file.data.items[itemIndex]['internal_item_name'] = e.target.value;
+              updateHiddenInput();
+            });
+
+            const dataList = document.createElement('datalist');
+            dataList.id = `internalItemNames${fileIndex}${itemIndex}`;
+            internalItemNames.forEach(name => {
+              const option = document.createElement('option');
+              option.value = name;
+              dataList.appendChild(option);
+            });
+
+            internalItemNameTd.appendChild(internalItemNameInput);
+            internalItemNameTd.appendChild(dataList);
+            itemRow.appendChild(internalItemNameTd);
+
+            // Add Brand Name field (optional, no required attribute)
+            const brandNameTd = document.createElement('td');
+            brandNameTd.contentEditable = true;
+            brandNameTd.textContent = item['brand_name'] || '';
+            brandNameTd.addEventListener('input', (e) => {
+              file.data.items[itemIndex]['brand_name'] = e.target.textContent;
+              updateHiddenInput();
+            });
+            itemRow.appendChild(brandNameTd);
+
+            // Add Package Weight field with required attribute
+            const packageWeightTd = document.createElement('td');
+            const packageWeightInput = document.createElement('input');
+            packageWeightInput.type = 'text';
+            packageWeightInput.required = true; // Make this field mandatory
+            packageWeightInput.addEventListener('input', (e) => {
+              file.data.items[itemIndex]['package_weight'] = e.target.value;
+              updateHiddenInput();
+            });
+            packageWeightTd.appendChild(packageWeightInput);
+            itemRow.appendChild(packageWeightTd);
+
             itemsTbody.appendChild(itemRow);
           });
 
@@ -90,6 +200,9 @@
           addRowButton.addEventListener('click', () => {
             const newRow = {};
             Object.keys(file.data.items[0]).forEach(key => newRow[key] = '');
+            newRow['internal_item_name'] = '';
+            newRow['brand_name'] = '';
+            newRow['package_weight'] = '';
             file.data.items.push(newRow);
 
             const itemRow = document.createElement('tr');
@@ -103,6 +216,50 @@
               });
               itemRow.appendChild(td);
             });
+
+            // Add Internal Item Name, Brand Name, and Package Weight fields for new row
+            const internalItemNameTd = document.createElement('td');
+            const internalItemNameInput = document.createElement('input');
+            internalItemNameInput.type = 'text';
+            internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${file.data.items.length - 1}`);
+            internalItemNameInput.required = true; // Make this field mandatory
+            internalItemNameInput.addEventListener('input', (e) => {
+              newRow['internal_item_name'] = e.target.value;
+              updateHiddenInput();
+            });
+
+            const dataList = document.createElement('datalist');
+            dataList.id = `internalItemNames${fileIndex}${file.data.items.length - 1}`;
+            internalItemNames.forEach(name => {
+              const option = document.createElement('option');
+              option.value = name;
+              dataList.appendChild(option);
+            });
+
+            internalItemNameTd.appendChild(internalItemNameInput);
+            internalItemNameTd.appendChild(dataList);
+            itemRow.appendChild(internalItemNameTd);
+
+            const brandNameTd = document.createElement('td');
+            brandNameTd.contentEditable = true;
+            brandNameTd.textContent = '';
+            brandNameTd.addEventListener('input', (e) => {
+              newRow['brand_name'] = e.target.textContent;
+              updateHiddenInput();
+            });
+            itemRow.appendChild(brandNameTd);
+
+            const packageWeightTd = document.createElement('td');
+            const packageWeightInput = document.createElement('input');
+            packageWeightInput.type = 'text';
+            packageWeightInput.required = true; // Make this field mandatory
+            packageWeightInput.addEventListener('input', (e) => {
+              newRow['package_weight'] = e.target.value;
+              updateHiddenInput();
+            });
+            packageWeightTd.appendChild(packageWeightInput);
+            itemRow.appendChild(packageWeightTd);
+
             itemsTbody.appendChild(itemRow);
             updateHiddenInput();
           });
@@ -121,12 +278,31 @@
       });
 
       updateHiddenInput();
+
+      // Debugging: Log the hidden input value before form submission
+      const form = document.querySelector('form');
+      form.addEventListener('submit', () => {
+        console.log(document.querySelector('input[name="parsed_data"]').value); // Log the hidden input value
+      });
     });
   </script>
 </head>
 <body>
   <h1>Review Parsed Data</h1>
   <form action="/accept" method="post">
+    <!-- Batch Number Input -->
+    <label for="batch-number">Batch Number (2 digits):</label>
+    <input type="text" id="batch-number" name="batch_number" maxlength="2" pattern="\d{2}" required>
+    <br><br>
+
+    <!-- Total Transportation Cost Input -->
+    <label for="transport-cost">Total Transportation Cost:</label>
+    <input type="text" id="transport-cost" name="transport_cost" required>
+    <br><br>
+
     <div id="data-container"></div>
     <input type="hidden" name="parsed_data" value="{{ processed_files | tojson }}">
     <button type="submit">Accept and Generate Excel</button>
+  </form>
+</body>
+</html>
