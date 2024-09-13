@@ -447,20 +447,20 @@ def accept():
     parsed_data_list = request.form['parsed_data']
     try:
         parsed_data_json = json.loads(parsed_data_list)
-        # Extract the processed files list
         processed_files = parsed_data_json.get('processedFiles', [])
     except json.JSONDecodeError as e:
         flash(f"Error decoding JSON data: {e}", 'danger')
         return redirect(url_for('index'))
     
-    # Extract the actual data list from processed files
     invoice_data = [file['data'] for file in processed_files]
 
     # Save parsed data to Excel
-    output_excel_path = os.path.join(app.config['OUTPUT_FOLDER'], '4 - Master Excel File 2.xlsx')
+    output_excel_path = os.path.join(app.config['OUTPUT_FOLDER'], '4 - Master Excel File.xlsx')
     save_to_excel(invoice_data, output_excel_path)
     
-    return send_file(output_excel_path, as_attachment=True)
+    # Instead of sending a file, redirect to a confirmation page or back to the form with a success message
+    # flash("Data has been successfully saved to Excel.", 'success')
+    return redirect(url_for('index'))  # Assuming 'index' is the route
 
 
 
