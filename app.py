@@ -38,9 +38,6 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 for folder in [app.config['UPLOAD_FOLDER'], app.config['PROCESSED_FOLDER'], app.config['OUTPUT_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
 
-
-
-
 def preprocess_image(image_path):
     """Preprocess the image to enhance OCR accuracy."""
     # Load the image
@@ -272,8 +269,43 @@ def get_column_letter(col_idx):
     from openpyxl.utils import get_column_letter
     return get_column_letter(col_idx)
 
+def export_to_sigma(parsed_data_list, output_excel_path):
+    try:
+        workbook = load_workbook(output_excel_path)
+        sheet = workbook.active  # Assuming the first sheet is the main sheet where data needs to be added
+    except FileNotFoundError:
+        print(f"Error: {output_excel_path} not found. Ensure the workbook exists before running this function.")
+        return
 
+    # Find the first empty row
+    max_row = sheet.max_row
+    first_empty_row = max_row + 1 if sheet.cell(row=max_row, column=1).value else max_row
 
+    # Populate data from the parsed_data_list
+    for data in parsed_data_list:
+        invoice_date = data.get("Date", "Unknown Date")
+        invoice_number = data.get("Invoice Number", "Unknown Number")
+        supplier_name = data.get("Supplier Name", "Unknown Supplier")
+
+        # Process each item in the invoice
+        for index, item in enumerate(data.get("items", []), start=first_empty_row + 1):
+            product_name = item.get("internal_item_name", "")
+            quantity = item.get("Quantity", 0)
+            batch_number = item.get("batchNumber", "00")  # Default to '00' if not found
+
+            # Write data to the corresponding columns in the sheet
+            sheet.cell(row=index, column=1, value=invoice_date)
+            sheet.cell(row=index, column=2, value=invoice_number)
+            sheet.cell(row=index, column=3, value=supplier_name)
+            sheet.cell(row=index, column=4, value=batch_number)
+            sheet.cell(row=index, column=5, value=product_name)
+            sheet.cell(row=index, column=6, value=quantity)
+
+            first_empty_row += 1  # Increment for the next item
+
+    # Save the changes to the workbook
+    workbook.save(filename=output_excel_path)
+    print(f"Data successfully saved to {output_excel_path}")
 
 def save_to_excel(parsed_data_list, output_excel_path):
     """Save parsed invoice data to an existing Excel file by adding a new sheet named after Supplier Name and Date."""
@@ -354,6 +386,8 @@ def save_to_excel(parsed_data_list, output_excel_path):
             row += 1
         item_name_to_row = load_internal_item_names("output/3 - Internal Item Name List.xlsx")
         update_ann_rate_sheet(ann_rate_sheet, invoice_date, data, item_name_to_row)
+
+        export_to_sigma(parsed_data_list, "output/5 - Product List in Sigma.xlsx")
 
         copy_package_weight_formulas(new_sheet, start_row=10, end_row=row - 1, package_weight_col=7)  # Special handling for package weight
         copy_formulas_down(new_sheet, start_row=10, end_row=row - 1, start_col=8, end_col=10)  # Copy other formulas
