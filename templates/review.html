@@ -150,7 +150,7 @@
             const internalItemNameInput = document.createElement('input');
             internalItemNameInput.type = 'text';
             internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${itemIndex}`);
-            //internalItemNameInput.required = true; // Make this field mandatory
+            internalItemNameInput.required = true; // Make this field mandatory
             internalItemNameInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['internal_item_name'] = e.target.value;
               updateHiddenInput();
@@ -182,7 +182,7 @@
             const packageWeightTd = document.createElement('td');
             const packageWeightInput = document.createElement('input');
             packageWeightInput.type = 'text';
-            //packageWeightInput.required = true; // Make this field mandatory
+            packageWeightInput.required = true; // Make this field mandatory
             packageWeightInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['package_weight'] = e.target.value;
               updateHiddenInput();
