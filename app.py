@@ -18,9 +18,12 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 import json
 from openpyxl import Workbook
+import os
+from dotenv import load_dotenv
 
-openai.api_key = "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"
+load_dotenv()  
 
+openai_api_key = os.getenv('OPENAI_API_KEY')
 
 # Flask app configuration
 app = Flask(__name__)
@@ -64,6 +67,7 @@ def parse_invoice_with_genai(extracted_text):
         "{\n"
         "  \"Supplier Name\": \"Supplier Name\",\n"
         "  \"Invoice Number\": \"Invoice Number\",\n"
+        "  \"Date\": \"Invoice Date\",\n"
         "  \"items\": [\n"
         "    {\n"
         "      \"Description\": \"Item Name\",\n"
@@ -130,7 +134,7 @@ def validate_and_correct_items(data):
                 corrected_sales_amount = round(corrected_quantity * rate, 2)
                 item["Quantity"] = corrected_quantity
                 item["Sales Amount"] = corrected_sales_amount
-                print(f"Corrected {description}: Quantity={corrected_quantity}, Sales Amount={corrected_sales_amount}")
+                #print(f"Corrected {description}: Quantity={corrected_quantity}, Sales Amount={corrected_sales_amount}")
         except (ValueError, TypeError) as e:
             # Log the error and continue processing the next item
             print(f"Error processing item: {item}. Error: {e}")
@@ -149,7 +153,7 @@ def extract_numeric_quantity(quantity):
             return int(quantity)
         elif isinstance(quantity, str):  # If it's a string, extract numeric part
             match = re.search(r'\d+', quantity)
-            print(match)
+            #print(match)
             return int(match.group()) if match else 0  # Return the number if found, otherwise 0
     except (ValueError, TypeError):
         return 0  # Return 0 if any error occurs during processing
@@ -213,6 +217,63 @@ def copy_mrp_formula(sheet, start_row, end_row, col_num):
         formula = mrp_formula.format(row=row)
         sheet.cell(row=row, column=col_num).value = formula 
 
+def load_internal_item_names(file_path):
+    try:
+        workbook = openpyxl.load_workbook(file_path, data_only=True)
+        first_sheet = workbook.worksheets[0]
+        internal_item_names = {
+            first_sheet[f"A{row}"].value: row for row in range(1, first_sheet.max_row + 1) if first_sheet[f"A{row}"].value
+        }
+        for item_name, row in internal_item_names.items():
+            print(f"Loaded internal item name: '{item_name}' at row {row}")
+        return internal_item_names
+    except Exception as e:
+        print(f"Error loading item names: {e}")
+        return {}
+
+def update_ann_rate_sheet(ann_rate_sheet, invoice_date, data, item_name_to_row):
+    # Finding the next available column to insert new data
+    next_available_col = find_next_available_column(ann_rate_sheet)
+    print(f"Next available column is {next_available_col} (Column {get_column_letter(next_available_col)})")
+
+    # Write the invoice date in row 2 of this column
+    ann_rate_sheet.cell(row=2, column=next_available_col).value = invoice_date
+    print(f"Set invoice date '{invoice_date}' at row 2, column {get_column_letter(next_available_col)}")
+
+    # Iterate over each item in the provided data
+    for item in data.get("items", []):
+        internal_item_name = item.get("internal_item_name", "").strip()  # Normalize the item name
+        print(f"Processing item '{internal_item_name}'")
+
+        if internal_item_name in item_name_to_row:
+            row_index = max(item_name_to_row[internal_item_name], 3) + 2  # Ensure row starts from at least row 3
+            rate = safe_float_conversion(item.get("Rate", 0))  # Safely convert the rate to float
+            # Set the rate in the correct row and column
+            ann_rate_sheet.cell(row=row_index, column=next_available_col).value = rate
+            print(f"Updated row {row_index}, column {get_column_letter(next_available_col)} with rate {rate}")
+        else:
+            print(f"Item '{internal_item_name}' not found in internal item names.")
+
+
+def find_next_available_column(sheet):
+    """
+    Find the next available column in the given sheet starting from a specific column
+    Here we start from column 2 (column B) and check row 2 for an empty cell.
+    """
+    col_index = 2  # Starting at column B
+    while sheet.cell(row=2, column=col_index).value is not None:
+        col_index += 1
+    return col_index
+
+def get_column_letter(col_idx):
+    """
+    Convert a column index into a column letter (e.g., 2 -> 'B')
+    """
+    from openpyxl.utils import get_column_letter
+    return get_column_letter(col_idx)
+
+
+
 
 def save_to_excel(parsed_data_list, output_excel_path):
     """Save parsed invoice data to an existing Excel file by adding a new sheet named after Supplier Name and Date."""
@@ -229,12 +290,17 @@ def save_to_excel(parsed_data_list, output_excel_path):
     if "Template Sheet" not in workbook.sheetnames:
         print("Template Sheet not found in the workbook.")
         return
+    
+    if "ANN RATE" not in workbook.sheetnames:
+        print("ANN RATE sheet not found in the workbook.")
+        return
 
     template_sheet = workbook["Template Sheet"]
+    ann_rate_sheet = workbook["ANN RATE"]
 
     for data in parsed_data_list:
         supplier_name = data.get("Supplier Name", "Unknown Supplier")
-        invoice_date = data.get("Invoice Number", "Unknown Date").split("/")[-1]  # Extract date from invoice number
+        invoice_date = data.get("Date", "Unknown Date")  # Extract date from invoice number
         sheet_name = f"{supplier_name} {invoice_date}"
 
         # Ensure the sheet name does not exceed Excel's limit of 31 characters
@@ -286,6 +352,8 @@ def save_to_excel(parsed_data_list, output_excel_path):
 
             # Continue to next row
             row += 1
+        item_name_to_row = load_internal_item_names("output/3 - Internal Item Name List.xlsx")
+        update_ann_rate_sheet(ann_rate_sheet, invoice_date, data, item_name_to_row)
 
         copy_package_weight_formulas(new_sheet, start_row=10, end_row=row - 1, package_weight_col=7)  # Special handling for package weight
         copy_formulas_down(new_sheet, start_row=10, end_row=row - 1, start_col=8, end_col=10)  # Copy other formulas

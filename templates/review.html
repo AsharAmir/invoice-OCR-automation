@@ -43,7 +43,7 @@
 
       // List of internal item names for autocomplete
       const internalItemNames = [
-        "PP ALMOND", "PP CHANNA DHALL", "PP CORIANDERA3", "PP DRIED GRAPES", "PP FENNEL",
+        "PP ALMOND", "PP CHANNA DHALL", "PP CORIANDER", "PP DRIED GRAPES", "PP FENNEL",
         "PP FENUGREK", "PP GREEN MOONG", "PP GREEN PEAS", "PP GROUNDNUT RAW", "PP GUNDU CHILLI",
         "PP JAGGERY PL", "PP JAVARISI", "PP JEERA", "PP LONG CHILLI", "PP MAAVU JAVARISI",
         "PP MEAL MAKER", "PP MEAL MAKER SMALL", "PP MOONG DHALL", "PP MOTCHAI", "PP MUSTARD BIG",
@@ -150,7 +150,7 @@
             const internalItemNameInput = document.createElement('input');
             internalItemNameInput.type = 'text';
             internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${itemIndex}`);
-            internalItemNameInput.required = true; // Make this field mandatory
+            //internalItemNameInput.required = true; // Make this field mandatory
             internalItemNameInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['internal_item_name'] = e.target.value;
               updateHiddenInput();
@@ -182,7 +182,7 @@
             const packageWeightTd = document.createElement('td');
             const packageWeightInput = document.createElement('input');
             packageWeightInput.type = 'text';
-            packageWeightInput.required = true; // Make this field mandatory
+            //packageWeightInput.required = true; // Make this field mandatory
             packageWeightInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['package_weight'] = e.target.value;
               updateHiddenInput();
