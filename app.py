@@ -6,7 +6,6 @@ from PIL import Image
 import cv2
 import openpyxl
 import json
-import google.generativeai as genai
 from PIL import Image, ImageEnhance, ImageFilter
 import openai
 from google.cloud import vision
@@ -23,7 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  
 
-openai_api_key = os.getenv('OPENAI_API_KEY')
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Flask app configuration
 app = Flask(__name__)
@@ -37,6 +36,26 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # Ensure folders exist
 for folder in [app.config['UPLOAD_FOLDER'], app.config['PROCESSED_FOLDER'], app.config['OUTPUT_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
+
+def convert_to_jpg(image_path):
+    """Convert image or PDF to JPG format if it's not already in that format."""
+    file_extension = os.path.splitext(image_path)[1].lower()
+    
+    if file_extension == '.pdf':
+        # Convert PDF to JPG
+        from pdf2image import convert_from_path
+        images = convert_from_path(image_path)
+        jpg_image_path = os.path.splitext(image_path)[0] + '.jpg'
+        images[0].save(jpg_image_path, 'JPEG')
+        return jpg_image_path
+    elif file_extension in ['.png', '.jpeg', '.jpg']:
+        # Convert other image formats to JPG
+        img = Image.open(image_path)
+        jpg_image_path = os.path.splitext(image_path)[0] + '.jpg'
+        img.convert('RGB').save(jpg_image_path, 'JPEG')
+        return jpg_image_path
+    else:
+        raise ValueError("Unsupported file type for conversion.")
 
 def preprocess_image(image_path):
     """Preprocess the image to enhance OCR accuracy."""
@@ -221,12 +240,26 @@ def load_internal_item_names(file_path):
         internal_item_names = {
             first_sheet[f"A{row}"].value: row for row in range(1, first_sheet.max_row + 1) if first_sheet[f"A{row}"].value
         }
-        for item_name, row in internal_item_names.items():
-            print(f"Loaded internal item name: '{item_name}' at row {row}")
+        # for item_name, row in internal_item_names.items():
+        #     print(f"Loaded internal item name: '{item_name}' at row {row}")
         return internal_item_names
     except Exception as e:
         print(f"Error loading item names: {e}")
         return {}
+    
+def load_internal_item_names_list(file_path):
+    try:
+        workbook = openpyxl.load_workbook(file_path, data_only=True)
+        first_sheet = workbook.worksheets[0]
+        internal_item_names = [
+            first_sheet[f"A{row}"].value for row in range(1, first_sheet.max_row + 1) 
+            if first_sheet[f"A{row}"].value
+        ]
+        return internal_item_names  # Return a list instead of a dictionary
+    except Exception as e:
+        print(f"Error loading item names: {e}")
+        return []  # Return an empty list on error
+
 
 def update_ann_rate_sheet(ann_rate_sheet, invoice_date, data, item_name_to_row):
     # Finding the next available column to insert new data
@@ -309,6 +342,7 @@ def export_to_sigma(parsed_data_list, output_excel_path):
 
 def save_to_excel(parsed_data_list, output_excel_path):
     """Save parsed invoice data to an existing Excel file by adding a new sheet named after Supplier Name and Date."""
+    print("writing to excel")
     print(parsed_data_list)
     # Load the existing workbook
     # Load the existing workbook
@@ -353,7 +387,7 @@ def save_to_excel(parsed_data_list, output_excel_path):
         for item in data.get("items", []):
             rate = safe_float_conversion(item.get("Rate", 0))  # Use safe conversion for Rate
             quantity = extract_numeric_quantity(item.get("Quantity", "0"))
-            total_weight += rate * quantity
+            total_weight += package_weight * quantity
 
         # Set values in the Excel sheet as per your format
         new_sheet['C1'] = total_weight  # C1: sum of (each item weight x qty)
@@ -413,20 +447,33 @@ def save_to_excel(parsed_data_list, output_excel_path):
     try:
         workbook.save(output_excel_path)
         print(f"Data successfully updated in {output_excel_path}")
+        os.startfile(output_excel_path)
     except Exception as e:
         print(f"Error saving Excel file: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    internal_item_names = load_internal_item_names_list("output/3 - Internal Item Name List.xlsx")  # Load names
+    processed_files = []  # Initialize as empty for GET requests
+
+    # Debugging: Log internal_item_names
+    print("Loaded Internal Item Names:", internal_item_names)
+
     if request.method == 'POST':
         files = request.files.getlist('files[]')
-        processed_files = []
         for file in files:
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
-                
+
+                # Convert to JPG if necessary
+                try:
+                    filepath = convert_to_jpg(filepath)
+                except ValueError as e:
+                    flash(str(e), 'danger')
+                    return redirect(url_for('index'))
+
                 # Perform OCR and parse the invoice
                 extracted_text = perform_ocr(filepath)
                 parsed_data = parse_invoice_with_genai(extracted_text)
@@ -437,10 +484,13 @@ def index():
                     'data': parsed_data
                 }
                 processed_files.append(processed_file)
-        
-        return render_template('review.html', processed_files=processed_files)
-    
-    return render_template('index.html')
+
+        # Render the review page with processed files and internal item names
+        return render_template('review.html', processed_files=processed_files, internal_item_names=internal_item_names)
+
+    # Render the index page with internal item names
+    return render_template('index.html', internal_item_names=internal_item_names)  # Pass names on GET
+
 
 @app.route('/accept', methods=['POST'])
 def accept():
@@ -459,10 +509,8 @@ def accept():
     save_to_excel(invoice_data, output_excel_path)
     
     # Instead of sending a file, redirect to a confirmation page or back to the form with a success message
-    # flash("Data has been successfully saved to Excel.", 'success')
+    flash("Data has been successfully saved to Excel.", 'success')
     return redirect(url_for('index'))  # Assuming 'index' is the route
-
-
 
 def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}

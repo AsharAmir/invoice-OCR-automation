@@ -8,12 +8,32 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const processedFiles = {{ processed_files|tojson }};
+      const internalItemNames = {{ internal_item_names | tojson }};
+      console.log("Processed Files:", processedFiles);
+      console.log("Internal Item Names:", internalItemNames);
+      
       const container = document.getElementById('data-container');
       const batchNumberInput = document.getElementById('batch-number');
       const transportCostInput = document.getElementById('transport-cost');
+      const totalSumField = document.createElement('div');
+      const checkDataButton = document.createElement('button');
+      const deleteRowButton = document.createElement('button');
+
+      totalSumField.id = 'total-sum';
+      totalSumField.textContent = 'Total Sales Amount: 0';
+      container.appendChild(totalSumField);
+
+      checkDataButton.textContent = 'Check Data';
+      checkDataButton.type = 'button';
+      checkDataButton.addEventListener('click', checkData);
+      container.appendChild(checkDataButton);
+
+      deleteRowButton.textContent = 'Delete Last Row';
+      deleteRowButton.type = 'button';
+      deleteRowButton.addEventListener('click', deleteLastRow);
+      container.appendChild(deleteRowButton);
 
       function updateHiddenInput() {
-        // Correctly format the JSON to match the expected structure
         const hiddenInput = document.querySelector('input[name="parsed_data"]');
         hiddenInput.value = JSON.stringify({
           processedFiles: processedFiles.map(file => ({
@@ -24,41 +44,70 @@
             }
           }))
         });
+        updateTotalSum(); // Update total sum whenever hidden input is updated
       }
 
-      // Validate batch number to be exactly 2 digits
+      function updateTotalSum() {
+        let total = 0;
+        processedFiles.forEach(file => {
+          file.data.items.forEach(item => {
+            const salesAmount = parseFloat(item['Sales Amount']) || 0;
+            total += salesAmount;
+          });
+        });
+        totalSumField.textContent = `Total Sales Amount: ${total.toFixed(2)}`;
+      }
+
+      function checkData() {
+        processedFiles.forEach(file => {
+          file.data.items.forEach((item, itemIndex) => {
+            const quantity = parseInt(item['Quantity']) || 0;
+            const salesAmount = parseFloat(item['Sales Amount'].replace(/,/g, '')) || 0;
+            const rate = salesAmount / quantity;
+            const actualRate = parseFloat(item['Rate']) || 0; 
+            const gstRate = parseFloat(item['GST']) || 0;
+            const calculatedAmount = quantity * rate;
+
+            console.log(`Item ${itemIndex}: Quantity=${quantity}, Rate=${rate.toFixed(2)}, Actual Rate=${actualRate.toFixed(2)}, GST Rate=${gstRate}, Expected Sales Amount=${calculatedAmount.toFixed(2)}, Actual Sales Amount=${salesAmount.toFixed(2)}`);
+
+            const salesAmountCell = document.querySelector(`#sales-amount-${itemIndex}`);
+            if (Math.abs(calculatedAmount - salesAmount) > 0.01) {
+              salesAmountCell.style.backgroundColor = 'red'; // Highlight cell if mismatch
+            } else {
+              salesAmountCell.style.backgroundColor = 'green'; // Reset highlight
+            }
+          });
+        });
+      }
+
+      function deleteLastRow() {
+        processedFiles.forEach(file => {
+          if (file.data.items.length > 0) {
+            file.data.items.pop(); // Remove the last item
+            const itemsTable = container.querySelector('table:last-of-type tbody');
+            if (itemsTable.rows.length > 0) {
+              itemsTable.deleteRow(-1); // Remove the last row from the table
+              updateHiddenInput(); // Update the hidden input and total sum
+              updateTotalSum();
+            }
+          }
+        });
+      }
+
       batchNumberInput.addEventListener('input', () => {
         const value = batchNumberInput.value;
         if (!/^\d{0,2}$/.test(value)) {
-          batchNumberInput.value = value.slice(0, 2); // Allow only 2 digits
+          batchNumberInput.value = value.slice(0, 2);
         }
         updateHiddenInput();
       });
 
-      // Update the hidden input when transportation cost changes
       transportCostInput.addEventListener('input', updateHiddenInput);
-
-      // Initial call to update hidden input
-      updateHiddenInput();
-
-      // List of internal item names for autocomplete
-      const internalItemNames = [
-        "PP ALMOND", "PP CHANNA DHALL", "PP CORIANDER", "PP DRIED GRAPES", "PP FENNEL",
-        "PP FENUGREK", "PP GREEN MOONG", "PP GREEN PEAS", "PP GROUNDNUT RAW", "PP GUNDU CHILLI",
-        "PP JAGGERY PL", "PP JAVARISI", "PP JEERA", "PP LONG CHILLI", "PP MAAVU JAVARISI",
-        "PP MEAL MAKER", "PP MEAL MAKER SMALL", "PP MOONG DHALL", "PP MOTCHAI", "PP MUSTARD BIG",
-        "PP MUSTARD SMALL", "PP ORID DHALL", "PP ORID DHALL BL", "PP ORID DHALL SPLIT",
-        "PP ORID DHALL SPLIT BLK", "PP PEPPER", "PP POTTUKADALAI", "PP RAGI", "PP RED CHANNA",
-        "PP RED CHANNA SMALL", "PP RED KARAMANI", "PP SUKKU", "PP TAMARIND", "PP TOOR DHALL",
-        "PP TURMERIC", "PP WH CHANNA", "PP WH CHANNA BIG", "PP WH KARAMANI", "PP WH PEAS",
-        "PP WHEAT", "PP WHEAT FLOUR"
-      ];
 
       processedFiles.forEach((file, fileIndex) => {
         const fileDiv = document.createElement('div');
         fileDiv.classList.add('file');
 
-        // Display Supplier Name and Invoice Number
         const supplierInfo = document.createElement('div');
         const supplierName = document.createElement('p');
         const invoiceNumber = document.createElement('p');
@@ -70,7 +119,6 @@
         supplierInfo.appendChild(invoiceNumber);
         fileDiv.appendChild(supplierInfo);
 
-        // Display other information if present
         if (file.data.other_info) {
           const otherInfoTable = document.createElement('table');
           otherInfoTable.border = '1';
@@ -103,7 +151,6 @@
           fileDiv.appendChild(otherInfoTable);
         }
 
-        // Display items table if items exist
         if (file.data.items && file.data.items.length > 0) {
           const itemsTable = document.createElement('table');
           itemsTable.border = '1';
@@ -117,7 +164,6 @@
             itemsHeaderRow.appendChild(th);
           });
 
-          // Add headers for new columns
           const internalItemNameTh = document.createElement('th');
           internalItemNameTh.textContent = 'Internal Item Name';
           itemsHeaderRow.appendChild(internalItemNameTh);
@@ -145,12 +191,10 @@
               itemRow.appendChild(td);
             });
 
-            // Add Internal Item Name field with autocomplete and required attribute
             const internalItemNameTd = document.createElement('td');
             const internalItemNameInput = document.createElement('input');
             internalItemNameInput.type = 'text';
             internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${itemIndex}`);
-            internalItemNameInput.required = true; // Make this field mandatory
             internalItemNameInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['internal_item_name'] = e.target.value;
               updateHiddenInput();
@@ -168,7 +212,6 @@
             internalItemNameTd.appendChild(dataList);
             itemRow.appendChild(internalItemNameTd);
 
-            // Add Brand Name field (optional, no required attribute)
             const brandNameTd = document.createElement('td');
             brandNameTd.contentEditable = true;
             brandNameTd.textContent = item['brand_name'] || '';
@@ -178,11 +221,9 @@
             });
             itemRow.appendChild(brandNameTd);
 
-            // Add Package Weight field with required attribute
             const packageWeightTd = document.createElement('td');
             const packageWeightInput = document.createElement('input');
             packageWeightInput.type = 'text';
-            packageWeightInput.required = true; // Make this field mandatory
             packageWeightInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['package_weight'] = e.target.value;
               updateHiddenInput();
@@ -190,10 +231,14 @@
             packageWeightTd.appendChild(packageWeightInput);
             itemRow.appendChild(packageWeightTd);
 
+            const salesAmountTd = document.createElement('td');
+            salesAmountTd.id = `sales-amount-${itemIndex}`;
+            salesAmountTd.textContent = item['Sales Amount'] || '';
+            itemRow.appendChild(salesAmountTd);
+
             itemsTbody.appendChild(itemRow);
           });
 
-          // Add new row button
           const addRowButton = document.createElement('button');
           addRowButton.type = 'button';
           addRowButton.textContent = 'Add Row';
@@ -217,12 +262,11 @@
               itemRow.appendChild(td);
             });
 
-            // Add Internal Item Name, Brand Name, and Package Weight fields for new row
             const internalItemNameTd = document.createElement('td');
             const internalItemNameInput = document.createElement('input');
             internalItemNameInput.type = 'text';
             internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${file.data.items.length - 1}`);
-            internalItemNameInput.required = true; // Make this field mandatory
+            internalItemNameInput.required = true;
             internalItemNameInput.addEventListener('input', (e) => {
               newRow['internal_item_name'] = e.target.value;
               updateHiddenInput();
@@ -252,7 +296,7 @@
             const packageWeightTd = document.createElement('td');
             const packageWeightInput = document.createElement('input');
             packageWeightInput.type = 'text';
-            packageWeightInput.required = true; // Make this field mandatory
+            packageWeightInput.required = true;
             packageWeightInput.addEventListener('input', (e) => {
               newRow['package_weight'] = e.target.value;
               updateHiddenInput();
@@ -279,10 +323,9 @@
 
       updateHiddenInput();
 
-      // Debugging: Log the hidden input value before form submission
       const form = document.querySelector('form');
       form.addEventListener('submit', () => {
-        console.log(document.querySelector('input[name="parsed_data"]').value); // Log the hidden input value
+        console.log("Submitting parsed data:", document.querySelector('input[name="parsed_data"]').value);
       });
     });
   </script>
@@ -290,12 +333,10 @@
 <body>
   <h1>Review Parsed Data</h1>
   <form action="/accept" method="post">
-    <!-- Batch Number Input -->
     <label for="batch-number">Batch Number (2 digits):</label>
     <input type="text" id="batch-number" name="batch_number" maxlength="2" pattern="\d{2}" required>
     <br><br>
 
-    <!-- Total Transportation Cost Input -->
     <label for="transport-cost">Total Transportation Cost:</label>
     <input type="text" id="transport-cost" name="transport_cost" required>
     <br><br>
