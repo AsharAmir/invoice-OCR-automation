@@ -110,7 +110,7 @@ def parse_invoice_with_genai(extracted_text):
         "- For entries with null values, ignore them in the output.\n"
         # "  IMPORTANT: Remeber that the quantity you extract will be a standalone entity, and wont be ever extracted from the product name. eg: if 'Exo Bar 50g(+10g) Fr Ging NB (216 pc)' is the product name, '216' will never be the quantity.\n"
         "- Lastly, since the raw text is OCR fetched, there sometimes might be issues in fetching the quantity, therefore you must calculate the quantity in this case by dividing the sales amount (WITHOUT TAX) with the rate.\n"
-        "- Provide a RAW JSON OUTPUT, with no backticks or formatting. The supplier name and invoice number should be the headers, and the items should contain the rest.\n\n"
+        "- Provide a RAW JSON OUTPUT, with no backticks or formatting (also ensure that there are no json curly braces anywhere in the parsed data as it may disturb the json structure). The supplier name and invoice number should be the headers, and the items should contain the rest.\n\n"
         f"{extracted_text}\n\n"
     )
 
@@ -378,7 +378,8 @@ def save_to_excel(parsed_data_list, output_excel_path):
 
         # Copy the template sheet to create a new sheet with the desired name
         new_sheet = workbook.copy_worksheet(template_sheet)
-        new_sheet.title = sheet_name
+        sheet_name = re.sub(r'[\/:*?"<>|]', '_', sheet_name)
+        new_sheet.title = sheet_name[:31]
 
         # Set up fields for each import
         total_weight = 0  # Initialize total weight
@@ -387,6 +388,7 @@ def save_to_excel(parsed_data_list, output_excel_path):
         for item in data.get("items", []):
             rate = safe_float_conversion(item.get("Rate", 0))  # Use safe conversion for Rate
             quantity = extract_numeric_quantity(item.get("Quantity", "0"))
+            package_weight = safe_float_conversion(item.get("package_weight", 0))
             total_weight += package_weight * quantity
 
         # Set values in the Excel sheet as per your format

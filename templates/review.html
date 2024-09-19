@@ -11,7 +11,7 @@
       const internalItemNames = {{ internal_item_names | tojson }};
       console.log("Processed Files:", processedFiles);
       console.log("Internal Item Names:", internalItemNames);
-      
+
       const container = document.getElementById('data-container');
       const batchNumberInput = document.getElementById('batch-number');
       const transportCostInput = document.getElementById('transport-cost');
@@ -59,19 +59,22 @@
       }
 
       function checkData() {
+        const tolerance = 10; // Define a tolerance level for floating-point discrepancies
+
         processedFiles.forEach(file => {
           file.data.items.forEach((item, itemIndex) => {
-            const quantity = parseInt(item['Quantity']) || 0;
+            const quantity = parseFloat(item['Quantity']) || 0;
             const salesAmount = parseFloat(item['Sales Amount'].replace(/,/g, '')) || 0;
-            const rate = salesAmount / quantity;
-            const actualRate = parseFloat(item['Rate']) || 0; 
+            const actualRate = parseFloat(item['Rate']) || 0;
             const gstRate = parseFloat(item['GST']) || 0;
-            const calculatedAmount = quantity * rate;
+            const calculatedAmount = quantity * actualRate;
 
-            console.log(`Item ${itemIndex}: Quantity=${quantity}, Rate=${rate.toFixed(2)}, Actual Rate=${actualRate.toFixed(2)}, GST Rate=${gstRate}, Expected Sales Amount=${calculatedAmount.toFixed(2)}, Actual Sales Amount=${salesAmount.toFixed(2)}`);
+            console.log(`Item ${itemIndex}: Quantity=${quantity}, Rate=${actualRate.toFixed(2)}, GST Rate=${gstRate}, Expected Sales Amount=${calculatedAmount.toFixed(2)}, Actual Sales Amount=${salesAmount.toFixed(2)}`);
 
             const salesAmountCell = document.querySelector(`#sales-amount-${itemIndex}`);
-            if (Math.abs(calculatedAmount - salesAmount) > 0.01) {
+
+            // Check if the calculated amount is within the tolerance of the actual sales amount
+            if (Math.abs(calculatedAmount - salesAmount) > tolerance) {
               salesAmountCell.style.backgroundColor = 'red'; // Highlight cell if mismatch
             } else {
               salesAmountCell.style.backgroundColor = 'green'; // Reset highlight
@@ -93,6 +96,52 @@
           }
         });
       }
+
+      // Validation for internal item names and package weight
+      function validateForm() {
+        let isValid = true;
+        const errorMessages = [];
+
+        processedFiles.forEach((file, fileIndex) => {
+          file.data.items.forEach((item, itemIndex) => {
+            const internalItemName = item['internal_item_name'] || '';
+            const packageWeight = item['package_weight'] || '';
+
+            // Check if internal item name is missing
+            if (!internalItemName.trim()) {
+              errorMessages.push(`Internal Item Name is required for item ${itemIndex + 1}`);
+              const internalItemNameInput = document.querySelector(`input[list="internalItemNames${fileIndex}${itemIndex}"]`);
+              internalItemNameInput.style.borderColor = 'red'; // Highlight missing input
+              isValid = false;
+            }
+
+            // Check if package weight is missing
+            if (!packageWeight.trim()) {
+              errorMessages.push(`Package Weight is required for item ${itemIndex + 1}`);
+              const packageWeightInput = document.querySelector(`input[type="text"][id="packageWeight${fileIndex}${itemIndex}"]`);
+              packageWeightInput.style.borderColor = 'red'; // Highlight missing input
+              isValid = false;
+            }
+          });
+        });
+
+        // Show alert or error message if the form is invalid
+        if (!isValid) {
+          alert("Please fix the following errors:\n" + errorMessages.join('\n'));
+        }
+
+        return isValid;
+      }
+
+      // Prevent form submission if validation fails
+      const form = document.querySelector('form');
+      form.addEventListener('submit', (e) => {
+        if (!validateForm()) {
+          e.preventDefault(); // Prevent form submission if validation fails
+        } else {
+          console.log("Submitting parsed data:", document.querySelector('input[name="parsed_data"]').value);
+        }
+      });
 
       batchNumberInput.addEventListener('input', () => {
         const value = batchNumberInput.value;
@@ -195,6 +244,7 @@
             const internalItemNameInput = document.createElement('input');
             internalItemNameInput.type = 'text';
             internalItemNameInput.setAttribute('list', `internalItemNames${fileIndex}${itemIndex}`);
+            internalItemNameInput.required = true;
             internalItemNameInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['internal_item_name'] = e.target.value;
               updateHiddenInput();
@@ -224,6 +274,7 @@
             const packageWeightTd = document.createElement('td');
             const packageWeightInput = document.createElement('input');
             packageWeightInput.type = 'text';
+            packageWeightInput.required = true;
             packageWeightInput.addEventListener('input', (e) => {
               file.data.items[itemIndex]['package_weight'] = e.target.value;
               updateHiddenInput();
@@ -322,11 +373,6 @@
       });
 
       updateHiddenInput();
-
-      const form = document.querySelector('form');
-      form.addEventListener('submit', () => {
-        console.log("Submitting parsed data:", document.querySelector('input[name="parsed_data"]').value);
-      });
     });
   </script>
 </head>
