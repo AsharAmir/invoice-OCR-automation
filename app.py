@@ -19,6 +19,9 @@ import json
 from openpyxl import Workbook
 import os
 from dotenv import load_dotenv
+import subprocess
+import platform
+
 
 load_dotenv()  
 
@@ -36,6 +39,17 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # Ensure folders exist
 for folder in [app.config['UPLOAD_FOLDER'], app.config['PROCESSED_FOLDER'], app.config['OUTPUT_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
+
+def open_excel_file(file_path):
+    try:
+        if platform.system() == "Windows":
+            os.startfile(file_path)
+        elif platform.system() == "Darwin":  # macOS
+            subprocess.run(["open", file_path])
+        else:  # Assume Linux
+            subprocess.run(["xdg-open", file_path])
+    except Exception as e:
+        print(f"Error opening file: {e}")
 
 def convert_to_jpg(image_path):
     """Convert image or PDF to JPG format if it's not already in that format."""
@@ -207,30 +221,24 @@ def copy_package_weight_formulas(sheet, start_row, end_row, package_weight_col):
 
 
 def copy_purchase_formula(sheet, start_row, end_row, col_num):
-    """
-    Copy the purchase formula down a specific column using column number directly.
-    """
-    purchase_formula = "=I{row}*$L$8"
+    column_letter = get_column_letter(col_num)
+    purchase_formula = "=I{row}*${col_letter}$8"
     for row in range(start_row, end_row + 1):
-        formula = purchase_formula.format(row=row)
-        sheet.cell(row=row, column=col_num).value = formula  # Use the column number directly
+        formula = purchase_formula.format(row=row, col_letter=column_letter)
+        sheet.cell(row=row, column=col_num).value = formula 
 
 def copy_sales_formula(sheet, start_row, end_row, col_num):
-    """
-    Copy the sales formula down a specific column using column number directly.
-    """
-    sales_formula = "=J{row}*$L$8*(1+$L$7)*(1+$E$10)"
+    left_column_letter = get_column_letter(col_num - 1)
+    sales_formula = "=J{row}*${col_left}$8*(1+${col_left}$7)*(1+$E$10)"
     for row in range(start_row, end_row + 1):
-        formula = sales_formula.format(row=row)
-        sheet.cell(row=row, column=col_num).value = formula  # Use the column number directly
+        formula = sales_formula.format(row=row, col_left=left_column_letter)
+        sheet.cell(row=row, column=col_num).value = formula  
 
 def copy_mrp_formula(sheet, start_row, end_row, col_num):
-    """
-    Copy the MRP formula down a specific column using column number directly.
-    """
-    mrp_formula = "=INT(M{row}*1.1)+$C$5/100"
+    left_column_letter = get_column_letter(col_num - 1)
+    mrp_formula = "=INT({col_left}{row}*1.1)+$C$5/100"
     for row in range(start_row, end_row + 1):
-        formula = mrp_formula.format(row=row)
+        formula = mrp_formula.format(row=row, col_left=left_column_letter)
         sheet.cell(row=row, column=col_num).value = formula 
 
 def load_internal_item_names(file_path):
@@ -294,13 +302,6 @@ def find_next_available_column(sheet):
     while sheet.cell(row=2, column=col_index).value is not None:
         col_index += 1
     return col_index
-
-def get_column_letter(col_idx):
-    """
-    Convert a column index into a column letter (e.g., 2 -> 'B')
-    """
-    from openpyxl.utils import get_column_letter
-    return get_column_letter(col_idx)
 
 def export_to_sigma(parsed_data_list, output_excel_path):
     try:
@@ -449,9 +450,15 @@ def save_to_excel(parsed_data_list, output_excel_path):
     try:
         workbook.save(output_excel_path)
         print(f"Data successfully updated in {output_excel_path}")
-        os.startfile(output_excel_path)
     except Exception as e:
         print(f"Error saving Excel file: {e}")
+        return
+
+    if os.path.exists(output_excel_path):
+        print(f"File exists after saving: {output_excel_path}")
+        open_excel_file(os.path.abspath('output/4 - Master Excel File.xlsx'))  # Attempt to open the file
+    else:
+        print(f"File does not exist after saving: {output_excel_path}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
