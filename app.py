@@ -21,6 +21,8 @@ import os
 from dotenv import load_dotenv
 import subprocess
 import platform
+import PyPDF2
+
 
 
 load_dotenv()  
@@ -34,11 +36,28 @@ app.config['PROCESSED_FOLDER'] = 'processed/'
 app.config['OUTPUT_FOLDER'] = 'output/'
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-
+ 
 
 # Ensure folders exist
 for folder in [app.config['UPLOAD_FOLDER'], app.config['PROCESSED_FOLDER'], app.config['OUTPUT_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
+
+def split_pdf_into_pages(pdf_path):
+    """Split a PDF file into single-page PDFs and return the list of file paths."""
+    pdf_reader = PyPDF2.PdfReader(pdf_path)
+    pdf_pages = []
+
+    for page_num in range(len(pdf_reader.pages)):
+        pdf_writer = PyPDF2.PdfWriter()
+        pdf_writer.add_page(pdf_reader.pages[page_num])
+
+        # Save each page as a separate PDF file
+        page_filename = f"{os.path.splitext(pdf_path)[0]}_page_{page_num + 1}.pdf"
+        with open(page_filename, 'wb') as output_pdf:
+            pdf_writer.write(output_pdf)
+        pdf_pages.append(page_filename)
+
+    return pdf_pages
 
 def open_excel_file(file_path):
     try:
@@ -56,14 +75,12 @@ def convert_to_jpg(image_path):
     file_extension = os.path.splitext(image_path)[1].lower()
     
     if file_extension == '.pdf':
-        # Convert PDF to JPG
         from pdf2image import convert_from_path
         images = convert_from_path(image_path)
         jpg_image_path = os.path.splitext(image_path)[0] + '.jpg'
         images[0].save(jpg_image_path, 'JPEG')
         return jpg_image_path
     elif file_extension in ['.png', '.jpeg', '.jpg']:
-        # Convert other image formats to JPG
         img = Image.open(image_path)
         jpg_image_path = os.path.splitext(image_path)[0] + '.jpg'
         img.convert('RGB').save(jpg_image_path, 'JPEG')
@@ -177,7 +194,6 @@ def validate_and_correct_items(data):
     return data
 
 def extract_numeric_quantity(quantity):
-    """Extract numeric part from a quantity string or handle non-string inputs safely."""
     try:
         if isinstance(quantity, (int, float)):  # If quantity is already a number, use it directly
             return int(quantity)
@@ -186,18 +202,15 @@ def extract_numeric_quantity(quantity):
             #print(match)
             return int(match.group()) if match else 0  # Return the number if found, otherwise 0
     except (ValueError, TypeError):
-        return 0  # Return 0 if any error occurs during processing
+        return 0  
 
 def adjust_formula(formula, source_row, target_row):
-    """Adjust the formula to update row references when copying it to a new row."""
     if formula and isinstance(formula, str) and formula.startswith('='):
-        # Use regex to find all occurrences of row numbers in the formula
         adjusted_formula = re.sub(r'(\d+)', lambda match: str(int(match.group(0)) + (target_row - source_row)), formula)
         return adjusted_formula
     return formula
 
 def copy_formulas_down(sheet, start_row, end_row, start_col, end_col):
-    """Copy formulas from the given row across specified columns down to a specified range of rows with adjusted row numbers."""
     for col in range(start_col, end_col + 1):
         base_formula = sheet.cell(row=start_row, column=col).value  # Get the formula from the template row
         for row in range(start_row + 1, end_row + 1):
@@ -205,14 +218,12 @@ def copy_formulas_down(sheet, start_row, end_row, start_col, end_col):
             sheet.cell(row=row, column=col, value=adjusted_formula)  # Copy the adjusted formula down
 
 def safe_float_conversion(value):
-    """Convert a value to float, return 0.0 if conversion fails."""
     try:
         return float(value)
     except (ValueError, TypeError):
         return 0.0
     
 def copy_package_weight_formulas(sheet, start_row, end_row, package_weight_col):
-    """Copy formulas down for package weight column while maintaining the same reference to $C$3."""
     for row in range(start_row, end_row + 1):
         # Set the formula to keep $C$3 fixed
         formula = f"=D{row}*$C$3"
@@ -294,10 +305,6 @@ def update_ann_rate_sheet(ann_rate_sheet, invoice_date, data, item_name_to_row):
 
 
 def find_next_available_column(sheet):
-    """
-    Find the next available column in the given sheet starting from a specific column
-    Here we start from column 2 (column B) and check row 2 for an empty cell.
-    """
     col_index = 2  # Starting at column B
     while sheet.cell(row=2, column=col_index).value is not None:
         col_index += 1
@@ -342,7 +349,6 @@ def export_to_sigma(parsed_data_list, output_excel_path):
     print(f"Data successfully saved to {output_excel_path}")
 
 def save_to_excel(parsed_data_list, output_excel_path):
-    """Save parsed invoice data to an existing Excel file by adding a new sheet named after Supplier Name and Date."""
     print("writing to excel")
     print(parsed_data_list)
     # Load the existing workbook
@@ -389,8 +395,8 @@ def save_to_excel(parsed_data_list, output_excel_path):
         for item in data.get("items", []):
             rate = safe_float_conversion(item.get("Rate", 0))  # Use safe conversion for Rate
             quantity = extract_numeric_quantity(item.get("Quantity", "0"))
-            package_weight = safe_float_conversion(item.get("package_weight", 0))
-            total_weight += package_weight * quantity
+            weight_per_quantity = safe_float_conversion(item.get("weight_per_quantity", 0))
+            total_weight += weight_per_quantity * quantity
 
         # Set values in the Excel sheet as per your format
         new_sheet['C1'] = total_weight  # C1: sum of (each item weight x qty)
@@ -405,16 +411,18 @@ def save_to_excel(parsed_data_list, output_excel_path):
             serial_number = index
             internal_item_name = item.get("internal_item_name", "")  # Use the internal item name from input
             brand_name = item.get("brand_name", "")  # Use the brand name from input
-            package_weight = safe_float_conversion(item.get("package_weight", 0))  # Use package weight from input
+            weight_per_quantity = safe_float_conversion(item.get("weight_per_quantity", 0))  # Use package weight from input
             # weight = safe_float_conversion(item.get("Rate", 0)) * extract_numeric_quantity(item.get("Quantity", "0"))  # D10: Weight = rate * qty
             gst = item.get("GST", "")
             sales_amount = safe_float_conversion(item.get("Sales Amount", ""))
+            _quantity = extract_numeric_quantity(item.get("Quantity", "0"))
 
             # Write data starting from row 10 and in appropriate columns
             new_sheet.cell(row=row, column=1, value=serial_number)  # Column A
             new_sheet.cell(row=row, column=2, value=internal_item_name)  # Column B
             new_sheet.cell(row=row, column=3, value=brand_name)  # Column C
-            new_sheet.cell(row=row, column=4, value=package_weight)  # Column D
+            new_sheet.cell(row=row, column=4, value=weight_per_quantity * _quantity)  # Column D
+            print(f"Weight per quantity: {weight_per_quantity}, Quantity: {_quantity}") #remove this
             new_sheet.cell(row=row, column=5, value=f"{gst}%")  # Column E (Formatted with %)
             new_sheet.cell(row=row, column=6, value=sales_amount)  # Column F
             #new_sheet.cell(row=row, column=7, value=package_weight)  # Column G (Package Weight)
@@ -476,29 +484,37 @@ def index():
                 filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(filepath)
 
-                # Convert to JPG if necessary
-                try:
-                    filepath = convert_to_jpg(filepath)
-                except ValueError as e:
-                    flash(str(e), 'danger')
-                    return redirect(url_for('index'))
+                # Handle PDFs by splitting them into pages
+                if filepath.lower().endswith('.pdf'):
+                    page_files = split_pdf_into_pages(filepath)
+                else:
+                    page_files = [filepath]  # Treat non-PDF files as single files
 
-                # Perform OCR and parse the invoice
-                extracted_text = perform_ocr(filepath)
-                parsed_data = parse_invoice_with_genai(extracted_text)
+                # Process each page or file separately
+                for page_file in page_files:
+                    try:
+                        # Perform OCR and parse the invoice
+                        filepath = convert_to_jpg(page_file)  # Use existing convert_to_jpg
+                        extracted_text = perform_ocr(filepath)
+                        parsed_data = parse_invoice_with_genai(extracted_text)
 
-                # Save the parsed data for review
-                processed_file = {
-                    'filename': filename,
-                    'data': parsed_data
-                }
-                processed_files.append(processed_file)
+                        # Save the parsed data for review
+                        processed_file = {
+                            'filename': os.path.basename(page_file),
+                            'data': parsed_data
+                        }
+                        processed_files.append(processed_file)
+
+                    except ValueError as e:
+                        flash(str(e), 'danger')
+                        return redirect(url_for('index'))
 
         # Render the review page with processed files and internal item names
         return render_template('review.html', processed_files=processed_files, internal_item_names=internal_item_names)
 
     # Render the index page with internal item names
     return render_template('index.html', internal_item_names=internal_item_names)  # Pass names on GET
+
 
 
 @app.route('/accept', methods=['POST'])
