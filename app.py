@@ -25,7 +25,9 @@ import PyPDF2
 
 load_dotenv()  
 
-openai.api_key = os.getenv('OPENAI_API_KEY')
+# openai.api_key = os.getenv('OPENAI_API_KEY')
+
+open.ai_key = 'API KEY HERE'
 
 # Flask app configuration
 app = Flask(__name__)
