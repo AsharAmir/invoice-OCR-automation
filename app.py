@@ -57,6 +57,28 @@ def split_pdf_into_pages(pdf_path):
 
     return pdf_pages
 
+def merge_invoice_data(invoices):
+    """Merge invoice items for pages belonging to the same supplier (case-insensitive)."""
+    merged_invoices = {}
+    
+    for invoice in invoices:
+        supplier_name = invoice.get("Supplier Name", "Unknown Supplier").strip().lower()  # Normalize case and strip spaces
+        
+        if supplier_name not in merged_invoices:
+            merged_invoices[supplier_name] = {
+                "Supplier Name": invoice.get("Supplier Name", "Unknown Supplier"),  # Use original case for output
+                "Invoice Number": invoice.get("Invoice Number", "Unknown Invoice"),
+                "Date": invoice.get("Date", "Unknown Date"),
+                "items": invoice.get("items", [])
+            }
+        else:
+            # Merge items if the supplier is the same (case-insensitive match)
+            merged_invoices[supplier_name]["items"].extend(invoice.get("items", []))
+    
+    return list(merged_invoices.values())
+
+
+
 def open_excel_file(file_path):
     try:
         if platform.system() == "Windows":
@@ -470,6 +492,7 @@ def save_to_excel(parsed_data_list, output_excel_path):
 def index():
     internal_item_names = load_internal_item_names_list("output/3 - Internal Item Name List.xlsx")  # Load names
     processed_files = []  # Initialize as empty for GET requests
+    all_invoices = []  # This will hold all invoices for merging later
 
     # Debugging: Log internal_item_names
     print("Loaded Internal Item Names:", internal_item_names)
@@ -496,16 +519,23 @@ def index():
                         extracted_text = perform_ocr(filepath)
                         parsed_data = parse_invoice_with_genai(extracted_text)
 
-                        # Save the parsed data for review
-                        processed_file = {
-                            'filename': os.path.basename(page_file),
-                            'data': parsed_data
-                        }
-                        processed_files.append(processed_file)
+                        # Append the parsed data to all_invoices for later merging
+                        all_invoices.append(parsed_data)
 
                     except ValueError as e:
                         flash(str(e), 'danger')
                         return redirect(url_for('index'))
+
+        # Merge invoices by supplier before rendering or saving
+        merged_invoices = merge_invoice_data(all_invoices)
+
+        # Save the merged invoices for review
+        for invoice in merged_invoices:
+            processed_file = {
+                'filename': invoice.get("Invoice Number", "Unknown Invoice"),
+                'data': invoice
+            }
+            processed_files.append(processed_file)
 
         # Render the review page with processed files and internal item names
         return render_template('review.html', processed_files=processed_files, internal_item_names=internal_item_names)
