@@ -23,8 +23,6 @@ import subprocess
 import platform
 import PyPDF2
 
-
-
 load_dotenv()  
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
