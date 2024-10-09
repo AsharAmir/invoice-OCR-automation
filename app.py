@@ -25,9 +25,7 @@ import PyPDF2
 
 load_dotenv()  
 
-# openai.api_key = os.getenv('OPENAI_API_KEY')
-
-open.ai_key = 'API KEY HERE'
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Flask app configuration
 app = Flask(__name__)
@@ -240,10 +238,19 @@ def copy_formulas_down(sheet, start_row, end_row, start_col, end_col):
             sheet.cell(row=row, column=col, value=adjusted_formula)  # Copy the adjusted formula down
 
 def safe_float_conversion(value):
+    if value in (None, "", " "):
+        print(f"Empty or None value for conversion: {value}, returning 0.0")
+        return 0.0
+    if isinstance(value, str):
+        value = value.replace(",", "")
+
     try:
         return float(value)
     except (ValueError, TypeError):
+        print(f"Conversion failed for value: {value}, returning 0.0")
         return 0.0
+
+
     
 def copy_package_weight_formulas(sheet, start_row, end_row, package_weight_col):
     for row in range(start_row, end_row + 1):
@@ -421,7 +428,8 @@ def save_to_excel(parsed_data_list, output_excel_path):
             total_weight += weight_per_quantity * quantity
 
         # Set values in the Excel sheet as per your format
-        new_sheet['C1'] = total_weight  # C1: sum of (each item weight x qty)
+        #new_sheet['C1'] = total_weight  # C1: sum of (each item weight x qty)
+        new_sheet['C1'] = "=SUM(D:D)"
         total_transport_cost = safe_float_conversion(data.get("transportCost", 0))  # Fetch the total transportation cost
         new_sheet['C2'] = total_transport_cost  # C2: Total Transportation Cost
         batch_number = data.get("batchNumber", "00")  # Fetch batch number from JSON, defaulting to '00'
@@ -435,8 +443,12 @@ def save_to_excel(parsed_data_list, output_excel_path):
             brand_name = item.get("brand_name", "")  # Use the brand name from input
             weight_per_quantity = safe_float_conversion(item.get("weight_per_quantity", 0))  # Use package weight from input
             # weight = safe_float_conversion(item.get("Rate", 0)) * extract_numeric_quantity(item.get("Quantity", "0"))  # D10: Weight = rate * qty
-            gst = item.get("GST", "")
-            sales_amount = safe_float_conversion(item.get("Sales Amount", ""))
+            gst = item.get("GST", 0)
+            gst = int(float(gst))
+            
+            #print(f"Raw sales amount before conversion: {item.get('Sales Amount')}")
+            sales_amount = safe_float_conversion(item.get("Sales Amount", "0"))
+            sales_amount = int(float(sales_amount))
             _quantity = extract_numeric_quantity(item.get("Quantity", "0"))
 
             # Write data starting from row 10 and in appropriate columns
@@ -447,6 +459,7 @@ def save_to_excel(parsed_data_list, output_excel_path):
             print(f"Weight per quantity: {weight_per_quantity}, Quantity: {_quantity}") #remove this
             new_sheet.cell(row=row, column=5, value=f"{gst}%")  # Column E (Formatted with %)
             new_sheet.cell(row=row, column=6, value=sales_amount)  # Column F
+            #print(f"_____________ sales amount: {sales_amount}\n")
             #new_sheet.cell(row=row, column=7, value=package_weight)  # Column G (Package Weight)
 
             # Continue to next row

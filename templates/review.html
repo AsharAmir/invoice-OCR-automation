@@ -105,7 +105,7 @@
         processedFiles.forEach((file, fileIndex) => {
           file.data.items.forEach((item, itemIndex) => {
             const internalItemName = item['internal_item_name'] || '';
-            const packageWeight = item['package_weight'] || '';
+            const packageWeight = item['weight_per_quantity'] || '';
 
             // Check if internal item name is missing
             if (!internalItemName.trim()) {
@@ -117,7 +117,7 @@
 
             // Check if package weight is missing
             if (!packageWeight.trim()) {
-              errorMessages.push(`Package Weight is required for item ${itemIndex + 1}`);
+              errorMessages.push(`Weight per quantity is required for item ${itemIndex + 1}`);
               const packageWeightInput = document.querySelector(`input[type="text"][id="packageWeight${fileIndex}${itemIndex}"]`);
               packageWeightInput.style.borderColor = 'red'; // Highlight missing input
               isValid = false;
@@ -222,7 +222,7 @@
           itemsHeaderRow.appendChild(brandNameTh);
 
           const packageWeightTh = document.createElement('th');
-          packageWeightTh.textContent = 'Package Weight';
+          packageWeightTh.textContent = 'Weight Per Quantity';
           itemsHeaderRow.appendChild(packageWeightTh);
 
           itemsThead.appendChild(itemsHeaderRow);
@@ -276,7 +276,7 @@
             packageWeightInput.type = 'text';
             packageWeightInput.required = true;
             packageWeightInput.addEventListener('input', (e) => {
-              file.data.items[itemIndex]['package_weight'] = e.target.value;
+              file.data.items[itemIndex]['weight_per_quantity'] = e.target.value;
               updateHiddenInput();
             });
             packageWeightTd.appendChild(packageWeightInput);
@@ -298,7 +298,7 @@
             Object.keys(file.data.items[0]).forEach(key => newRow[key] = '');
             newRow['internal_item_name'] = '';
             newRow['brand_name'] = '';
-            newRow['package_weight'] = '';
+            newRow['weight_per_quantity'] = '';
             file.data.items.push(newRow);
 
             const itemRow = document.createElement('tr');
@@ -349,7 +349,7 @@
             packageWeightInput.type = 'text';
             packageWeightInput.required = true;
             packageWeightInput.addEventListener('input', (e) => {
-              newRow['package_weight'] = e.target.value;
+              newRow['weight_per_quantity'] = e.target.value;
               updateHiddenInput();
             });
             packageWeightTd.appendChild(packageWeightInput);
